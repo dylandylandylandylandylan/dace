@@ -4,46 +4,6 @@ use dace::ast::Stmt;
 use dace::loop_node;
 use std::rc::Rc;
 
-pub fn lu(n: usize) -> Rc<Node> {
-    let ubound = n as i32;
-    let ref_a_ij = Node::new_ref("A", vec![n, n], |ijk| {
-        vec![ijk[0] as usize, ijk[1] as usize]
-    });
-    let ref_a_ik = Node::new_ref("A", vec![n, n], |ijk| {
-        vec![ijk[0] as usize, ijk[2] as usize]
-    });
-    let ref_a_kj = Node::new_ref("A", vec![n, n], |ijk| {
-        vec![ijk[2] as usize, ijk[1] as usize]
-    });
-    let ref_a_jj = Node::new_ref("A", vec![n, n], |ijk| {
-        vec![ijk[1] as usize, ijk[1] as usize]
-    });
-
-    let k_loop_ref_j = loop_node!("k", 0 => move |ijk:&[i32]| ijk[1]);
-    Node::extend_loop_body(&k_loop_ref_j, &ref_a_ik);
-    Node::extend_loop_body(&k_loop_ref_j, &ref_a_kj);
-    Node::extend_loop_body(&k_loop_ref_j, &ref_a_ij);
-
-    let j_loop_lower_ref = loop_node!("j", 0 => move |ijk:&[i32]| ijk[0]);
-    Node::extend_loop_body(&j_loop_lower_ref, &k_loop_ref_j);
-    Node::extend_loop_body(&j_loop_lower_ref, &ref_a_jj);
-    Node::extend_loop_body(&j_loop_lower_ref, &ref_a_ij);
-
-    let k_loop_ref_i = loop_node!("k", 0 => move |ijk:&[i32]| ijk[0]);
-    Node::extend_loop_body(&k_loop_ref_i, &ref_a_ik);
-    Node::extend_loop_body(&k_loop_ref_i, &ref_a_kj);
-    Node::extend_loop_body(&k_loop_ref_i, &ref_a_ij);
-
-    let j_loop_upper_ref = loop_node!("j", move |ijk:&[i32]| ijk[0] => ubound);
-    Node::extend_loop_body(&j_loop_upper_ref, &k_loop_ref_i);
-
-    let i_loop_ref = Node::new_single_loop("i", 0, ubound);
-    Node::extend_loop_body(&i_loop_ref, &j_loop_lower_ref);
-    Node::extend_loop_body(&i_loop_ref, &j_loop_upper_ref);
-
-    i_loop_ref
-}
-
 fn trmm_trace(M: usize, N: usize) -> Rc<Node> {
     let i_loop_ref = Node::new_single_loop("i", 0, M as i32);
     let j_loop_ref = Node::new_single_loop("j", 0, N as i32);
@@ -244,48 +204,52 @@ pub fn syr2d(n: usize, m: usize) -> Rc<Node> {
     i_loop_ref
 }
 
-fn _2mm(NI: usize, NJ: usize, NK: usize, NL: usize) -> Rc<Node> {
-    let s_ref_tmp = Node::new_ref("tmp", vec![NI, NJ], |ijk| {
-        vec![ijk[0] as usize, ijk[1] as usize]
-    });
-    let s_ref_a = Node::new_ref("a", vec![NI, NK], |ijk| {
-        vec![ijk[0] as usize, ijk[2] as usize]
-    });
-    let s_ref_b = Node::new_ref("b", vec![NK, NJ], |ijk| {
-        vec![ijk[2] as usize, ijk[1] as usize]
-    });
-    let s_ref_c = Node::new_ref("c", vec![NL, NJ], |ijk| {
-        vec![ijk[3] as usize, ijk[1] as usize]
-    });
-    let s_ref_d = Node::new_ref("d", vec![NI, NL], |ijk| {
-        vec![ijk[0] as usize, ijk[3] as usize]
-    });
-
-    let knk_loop_ref = Node::new_single_loop("k", 0, NK as i32);
-    Node::extend_loop_body(&knk_loop_ref, &s_ref_a);
-    Node::extend_loop_body(&knk_loop_ref, &s_ref_b);
-    Node::extend_loop_body(&knk_loop_ref, &s_ref_tmp);
-
-    let jnj_loop_ref = Node::new_single_loop("j", 0, NJ as i32);
-    Node::extend_loop_body(&knk_loop_ref, &s_ref_tmp);
-    Node::extend_loop_body(&knk_loop_ref, &knk_loop_ref);
-
-    let ini_loop_ref1 = Node::new_single_loop("i", 0, NI as i32);
-    Node::extend_loop_body(&ini_loop_ref1, &jnj_loop_ref);
-
-    let knj_loop_ref = Node::new_single_loop("k", 0, NJ as i32);
-    Node::extend_loop_body(&knj_loop_ref, &s_ref_tmp);
-    Node::extend_loop_body(&knj_loop_ref, &s_ref_c);
-    Node::extend_loop_body(&knj_loop_ref, &s_ref_d);
-
-    let jnl_loop_ref = Node::new_single_loop("j", 0, NL as i32);
-    Node::extend_loop_body(&jnj_loop_ref, &s_ref_d);
-    Node::extend_loop_body(&jnj_loop_ref, &knj_loop_ref);
-
-    let ini_loop_ref2 = Node::new_single_loop("i", 0, NI as i32);
-    Node::extend_loop_body(&ini_loop_ref2, &jnl_loop_ref);
-
-    Node::new_node(Stmt::Block(vec![ini_loop_ref1, ini_loop_ref2]))
+pub fn cholesky (n: usize) -> Rc<Node> {
+    let ubound = n as i32;
+    
+    //create A[i * N + j] -= A[i * N + k] * A[j * N + k];
+    let s_ref_aij1 = Node::new_ref("a", vec![n,n], |ijk| vec![ijk[0] as usize, ijk[1] as usize]);
+    let s_ref_aik1 = Node:: new_ref("a", vec![n,n], |ijk| vec![ijk[0] as usize, ijk[2] as usize]);
+    let s_ref_ajk = Node:: new_ref("a", vec![n,n], |ijk| vec![ijk[1] as usize, ijk[2] as usize]);
+        
+    // create A[i * N + j] /= A[j * N + j];
+    let s_ref_aij2 = Node::new_ref("a", vec![n,n], |ijk| vec![ijk[0] as usize, ijk[1] as usize]);
+    let s_ref_ajj = Node::new_ref("a", vec![n], |ijk| vec![ijk[1]]);
+    
+    //create A[i * N + i] -= A[i * N + k] * A[i * N + k];
+    let s_ref_aii1 = Node::new_ref("a", vec![n], |ijk| vec![ijk[0] as usize]);
+    let s_ref_aik2 = Node::new_ref("a", vec![n,n], |ijk| vec![ijk[0] as usize, ijk[2] as usize]);
+    
+    //create A[i * N + i] = sqrt(A[i * N + i]);
+    let s_ref_aii2 = Node::new_ref("a", vec![n], |ijk| vec![ijk[0] as usize]);
+    
+    let k1_loop_ref = Node::new_single_loop_dyn_ub("k", 0, move |j| j[0]);
+    Node::extend_loop_body(&k1_loop_ref, &s_ref_aik1);
+    Node::extend_loop_body(&k1_loop_ref, &s_ref_ajk);
+    Node::extend_loop_body(&k1_loop_ref, &s_ref_aij1);
+    Node::extend_loop_body(&k1_loop_ref, &s_ref_aij1);
+    
+    let j_loop_ref = Node::new_single_loop_dyn_ub("j", move |i| i[0]);
+    Node::extend_loop_body(&j_loop_ref, &k1_loop_ref);
+    Node::extend_loop_body(&j_loop_ref, &s_ref_ajj);
+    Node::extend_loop_body(&j_loop_ref, &s_ref_aij2);
+    Node::extend_loop_body(&j_loop_ref, &s_ref_aij2);
+    
+    //independent of k1 loop above, not in the same scope, they share a k variable name and A accesses elements using k for both loops
+    let k2_loop_ref = Node::new_single_loop_dyn_ub("k", 0, move |i| i[0]);
+    Node::extend_loop_body(&k2_loop_ref, &s_ref_aik2);
+    Node::extend_loop_body(&k2_loop_ref, &s_ref_aik2);
+    Node::extend_loop_body(&k2_loop_ref, &s_ref_aii1);
+    Node::extend_loop_body(&k2_loop_ref, &s_ref_aii1);
+    
+    let i_loop_ref = Node::new_single_loop("i", 0, ubound);
+    Node::extend_loop_body(&i_loop_ref, &j_loop_ref);
+    Node::extend_loop_body(&i_loop_ref, &k2_loop_ref);
+    Node::extend_loop_body(&i_loop_ref, &s_ref_aii2);
+    Node::extend_loop_body(&i_loop_ref, &s_ref_aii2);
+    
+    i_loop_ref
+    
 }
 
 #[cfg(test)]
@@ -318,15 +282,9 @@ mod tests {
     fn test_syr2d() {
         assert_eq!(syr2d(1024, 1024).node_count(), 12);
     }
-
+    
     #[test]
-    fn _2mm_test() {
-        assert_eq!(_2mm(1024, 1024, 1024, 1024).node_count(), 10);
-    }
-
-    #[test]
-    fn lu_test() {
-        let mm = lu(100);
-        assert_eq!(mm.node_count(), 13);
+    fn test_cholesky(){
+        assert_eq!(cholesky(1024).node_count(), 17)
     }
 }

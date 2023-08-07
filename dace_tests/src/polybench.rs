@@ -424,8 +424,8 @@ pub fn cholesky(n: usize) -> Rc<Node> {
 
     //create A[i * N + i] -= A[i * N + k] * A[i * N + k];
     let mut s_ref_aii1 = Node::new_ref("a", vec![n], |ijk| vec![ijk[0] as usize]);
-    let mut s_ref_aik2 = Node::new_ref("a", vec![n, n], |ijk| {
-        vec![ijk[0] as usize, ijk[2] as usize]
+    let mut s_ref_aik2 = Node::new_ref("a", vec![n, n], |ik| {
+        vec![ik[0] as usize, ik[1] as usize]
     });
 
     //create A[i * N + i] = sqrt(A[i * N + i]);
